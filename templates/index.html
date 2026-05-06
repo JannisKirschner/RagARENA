@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RagCTF</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: #ffffff;
+            color: #333;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        h1 {
+            color: #cc0000;
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        /* Level tabs */
+        .level-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 2rem;
+        }
+        .level-tab {
+            padding: 0.8rem 1.5rem;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            color: #888;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .level-tab:first-child { border-radius: 6px 0 0 6px; }
+        .level-tab:last-child { border-radius: 0 6px 6px 0; }
+        .level-tab:hover { background: #eee; color: #555; }
+        .level-tab.active {
+            background: #fff0f0;
+            border-color: #cc0000;
+            color: #cc0000;
+        }
+
+        /* Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        .panel {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 1.5rem;
+        }
+        .panel h2 {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Forms */
+        textarea, input[type="text"] {
+            width: 100%;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            color: #333;
+            font-family: inherit;
+            font-size: 0.85rem;
+            padding: 0.8rem;
+            resize: vertical;
+        }
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #cc0000;
+        }
+        textarea { min-height: 120px; }
+        .query-input { min-height: 40px; resize: none; }
+
+        button {
+            background: #cc0000;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 0.7rem 1.5rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-top: 0.8rem;
+            transition: background 0.2s;
+        }
+        button:hover { background: #aa0000; }
+        button.secondary {
+            background: #e0e0e0;
+            color: #555;
+        }
+        button.secondary:hover { background: #d0d0d0; }
+        button.exploit-btn {
+            background: #7c3aed;
+        }
+        button.exploit-btn:hover { background: #6d28d9; }
+        button:disabled {
+            background: #e0e0e0;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        /* Results */
+        .result {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .result.success { border-color: #22883388; }
+        .result.rejected { border-color: #cc8800; }
+        .result.poisoned { border-color: #cc0000; background: #fff5f5; }
+        .result.blocked { border-color: #4444ff; }
+
+        .flag {
+            display: inline-block;
+            background: #cc0000;
+            color: #fff;
+            padding: 0.2rem 0.6rem;
+            border-radius: 3px;
+            font-weight: bold;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse {
+            from { opacity: 0.7; }
+            to { opacity: 1; }
+        }
+
+        /* Retrieved chunks */
+        .chunks {
+            margin-top: 0.8rem;
+            font-size: 0.75rem;
+            color: #666;
+        }
+        .chunk {
+            padding: 0.5rem;
+            margin: 0.3rem 0;
+            background: #fff;
+            border-left: 2px solid #ccc;
+        }
+        .chunk .source { color: #666; }
+        .chunk .similarity {
+            color: #cc8800;
+            float: right;
+            font-weight: bold;
+        }
+        .chunk.seed { border-left-color: #228833; }
+        .chunk.submitted { border-left-color: #cc0000; }
+        .chunk.filtered {
+            border-left-color: #cc8800;
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+        .chunk .filter-reason {
+            color: #cc8800;
+            font-style: italic;
+            display: block;
+            margin-top: 0.3rem;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .spinner {
+            display: none;
+            color: #cc0000;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+        .spinner.active { display: block; }
+
+        /* Document viewer */
+        .doc-viewer {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 1.5rem;
+        }
+        .doc-viewer h2 {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .doc-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .doc-item {
+            padding: 0.6rem 0.8rem;
+            margin: 0.3rem 0;
+            background: #fff;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            border-left: 3px solid #ccc;
+        }
+        .doc-item.seed { border-left-color: #228833; }
+        .doc-item.submitted { border-left-color: #cc0000; }
+        .doc-item .doc-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.3rem;
+        }
+        .doc-item .doc-source { color: #666; }
+        .doc-item .doc-type {
+            font-size: 0.7rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 2px;
+        }
+        .doc-type.seed { background: #e8f5e9; color: #228833; }
+        .doc-type.submitted { background: #ffebee; color: #cc0000; }
+        .doc-item .doc-text {
+            color: #666;
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+        .doc-count {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 0.8rem;
+        }
+        .doc-count .seed-count { color: #228833; }
+        .doc-count .poison-count { color: #cc0000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RagCTF</h1>
+        <p class="subtitle">Make the bot give the wrong helpdesk number</p>
+
+        <div class="level-tabs">
+            <button class="level-tab active" onclick="setLevel(1)">Level 1: No Defenses</button>
+            <button class="level-tab" onclick="setLevel(2)">Level 2: Similarity Ceiling</button>
+            <button class="level-tab" onclick="setLevel(3)">Level 3: Trust Weighting</button>
+        </div>
+
+        <div class="main-grid">
+            <!-- Attack Panel -->
+            <div class="panel">
+                <div class="status-bar">
+                    <h2>Inject Document</h2>
+                    <div class="btn-group">
+                        {% if examples_mode %}
+                        <button class="exploit-btn" onclick="loadExploit()">Load Example Exploit</button>
+                        {% endif %}
+                        <button class="secondary" onclick="resetLevel()">Reset Level</button>
+                    </div>
+                </div>
+                <textarea id="poison-doc" placeholder="Paste your poisoned document here..."></textarea>
+                <button onclick="ingestDocument()">Inject</button>
+                <div class="spinner" id="ingest-spinner">Ingesting...</div>
+                <div class="result" id="ingest-result" style="display:none"></div>
+            </div>
+
+            <!-- Query Panel -->
+            <div class="panel">
+                <div class="status-bar">
+                    <h2>Query the Bot</h2>
+                    <button class="secondary" onclick="queryDefault()">Ask: "What's the helpdesk number?"</button>
+                </div>
+                <textarea class="query-input" id="query-input" placeholder="Ask a question..." rows="1">What's the helpdesk number?</textarea>
+                <button onclick="queryBot()">Ask</button>
+                <div class="spinner" id="query-spinner">Thinking...</div>
+                <div class="result" id="query-result" style="display:none"></div>
+                <div class="chunks" id="query-chunks"></div>
+            </div>
+        </div>
+
+        <!-- Document Viewer -->
+        <div class="doc-viewer">
+            <div class="status-bar">
+                <h2>Knowledge Base Contents</h2>
+                <button class="secondary" onclick="refreshDocs()">Refresh</button>
+            </div>
+            <div class="doc-count" id="doc-count"></div>
+            <div class="doc-list" id="doc-list"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentLevel = 1;
+        const examplesMode = {{ examples_mode | default(false) | tojson }};
+
+        function setLevel(level) {
+            currentLevel = level;
+            document.querySelectorAll('.level-tab').forEach((tab, i) => {
+                tab.classList.toggle('active', i + 1 === level);
+            });
+            document.getElementById('ingest-result').style.display = 'none';
+            document.getElementById('query-result').style.display = 'none';
+            document.getElementById('query-chunks').innerHTML = '';
+            refreshDocs();
+        }
+
+        function queryDefault() {
+            document.getElementById('query-input').value = "What's the helpdesk number?";
+            queryBot();
+        }
+
+        async function refreshDocs() {
+            const resp = await fetch(`/documents?level=${currentLevel}`);
+            const data = await resp.json();
+
+            const seedCount = data.documents.filter(d => d.type === 'seed').length;
+            const poisonCount = data.documents.filter(d => d.type === 'submitted').length;
+
+            document.getElementById('doc-count').innerHTML =
+                `<span class="seed-count">${seedCount} seed chunks</span>` +
+                (poisonCount > 0 ? ` + <span class="poison-count">${poisonCount} injected chunks</span>` : '') +
+                ` (${data.total} total)`;
+
+            const list = document.getElementById('doc-list');
+            list.innerHTML = data.documents.map(d => `
+                <div class="doc-item ${d.type}">
+                    <div class="doc-header">
+                        <span class="doc-source">${d.source}</span>
+                        <span class="doc-type ${d.type}">${d.type}</span>
+                    </div>
+                    <div class="doc-text">${escapeHtml(d.text)}</div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function loadExploit() {
+            try {
+                const formData = new FormData();
+                formData.append('level', currentLevel);
+
+                const resp = await fetch('/load-exploit', { method: 'POST', body: formData });
+                const data = await resp.json();
+
+                // Populate the inject textarea with the exploit text
+                document.getElementById('poison-doc').value = data.exploit_text;
+                document.getElementById('query-input').value = data.suggested_query;
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function ingestDocument() {
+            const content = document.getElementById('poison-doc').value;
+            if (!content.trim()) return;
+
+            const spinner = document.getElementById('ingest-spinner');
+            const result = document.getElementById('ingest-result');
+            spinner.classList.add('active');
+            result.style.display = 'none';
+
+            try {
+                const formData = new FormData();
+                formData.append('level', currentLevel);
+                formData.append('content', content);
+
+                const resp = await fetch('/ingest', { method: 'POST', body: formData });
+                const data = await resp.json();
+
+                result.style.display = 'block';
+                if (data.status === 'rejected') {
+                    result.className = 'result rejected';
+                    result.textContent = data.reason;
+                } else {
+                    result.className = 'result success';
+                    result.textContent = `Document accepted. ${data.chunks_ingested} chunk(s) ingested.`;
+                }
+
+                refreshDocs();
+            } catch (e) {
+                result.style.display = 'block';
+                result.className = 'result';
+                result.textContent = 'Error: ' + e.message;
+            }
+
+            spinner.classList.remove('active');
+        }
+
+        async function queryBot() {
+            const query = document.getElementById('query-input').value;
+            if (!query.trim()) return;
+
+            const spinner = document.getElementById('query-spinner');
+            const result = document.getElementById('query-result');
+            const chunks = document.getElementById('query-chunks');
+            spinner.classList.add('active');
+            result.style.display = 'none';
+            chunks.innerHTML = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('level', currentLevel);
+                formData.append('query', query);
+
+                const resp = await fetch('/query', { method: 'POST', body: formData });
+                const data = await resp.json();
+
+                result.style.display = 'block';
+
+                if (data.output_blocked) {
+                    result.className = 'result blocked';
+                    result.textContent = data.answer;
+                } else if (data.poisoned) {
+                    result.className = 'result poisoned';
+                    result.innerHTML = '<span class="flag">POISONED</span>\n\n' + escapeHtml(data.answer);
+                } else {
+                    result.className = 'result';
+                    result.textContent = data.answer;
+                }
+
+                // Show retrieved chunks
+                if (data.retrieved_chunks) {
+                    let html = '<strong>Retrieved chunks:</strong>';
+                    if (data.consensus_filtered > 0) {
+                        html += ` <span style="color:#cc8800">(${data.consensus_filtered} chunk(s) filtered by consensus)</span>`;
+                    }
+                    data.retrieved_chunks.forEach(c => {
+                        const type = c.id.startsWith('seed_') ? 'seed' : 'submitted';
+                        let scoreHtml = '';
+                        if (c.trust) {
+                            const trustColor = c.trust === 'trusted' ? '#228833' : '#cc0000';
+                            scoreHtml = `<span class="similarity">${(c.similarity * 100).toFixed(1)}% × ${c.trust === 'trusted' ? '4.0' : '1.0'} = <span style="color:${trustColor}">${(c.weighted_score * 100).toFixed(1)}</span></span>`;
+                        } else {
+                            scoreHtml = c.similarity !== undefined ? `<span class="similarity">${(c.similarity * 100).toFixed(1)}% similar</span>` : '';
+                        }
+                        const trustBadge = c.trust ? `<span style="color:${c.trust === 'trusted' ? '#228833' : '#cc0000'}; font-size:0.7rem">[${c.trust}]</span> ` : '';
+                        html += `<div class="chunk ${type}">${scoreHtml}${trustBadge}<span class="source">[${c.source}]</span> ${escapeHtml(c.text.substring(0, 200))}...</div>`;
+                    });
+                    // Show filtered chunks
+                    if (data.filtered_chunks && data.filtered_chunks.length > 0) {
+                        html += `<br><strong>Filtered out (${data.filtered_chunks.length}):</strong>`;
+                        data.filtered_chunks.forEach(c => {
+                            const sim = c.similarity !== undefined ? `<span class="similarity">${(c.similarity * 100).toFixed(1)}% similar</span>` : '';
+                            html += `<div class="chunk filtered">${sim}<span class="source">[${c.source}]</span> ${escapeHtml(c.text.substring(0, 200))}...<span class="filter-reason">${escapeHtml(c.reason)}</span></div>`;
+                        });
+                    }
+                    chunks.innerHTML = html;
+                }
+            } catch (e) {
+                result.style.display = 'block';
+                result.className = 'result';
+                result.textContent = 'Error: ' + e.message;
+            }
+
+            spinner.classList.remove('active');
+        }
+
+        async function resetLevel() {
+            const formData = new FormData();
+            formData.append('level', currentLevel);
+            await fetch('/reset', { method: 'POST', body: formData });
+
+            document.getElementById('ingest-result').style.display = 'none';
+            document.getElementById('query-result').style.display = 'none';
+            document.getElementById('query-chunks').innerHTML = '';
+            refreshDocs();
+        }
+
+        // Init
+        setLevel(1);
+    </script>
+</body>
+</html>
